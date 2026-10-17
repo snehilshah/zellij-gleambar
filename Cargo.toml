@@ -1,0 +1,13 @@
+[package]
+name = "zellij-gleambar"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+zellij-tile = "0.45.1"
+unicode-width = { version = "0.2.2", default-features = false }
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
