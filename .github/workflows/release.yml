@@ -1,0 +1,31 @@
+name: Release
+
+# Push a tag like v0.2.0 (matching Cargo.toml) to publish gleambar.wasm.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+      - name: Check tag matches Cargo.toml
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME != v$version"; exit 1; }
+      - run: cargo build --release --locked
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp target/wasm32-wasip1/release/zellij-gleambar.wasm gleambar.wasm
+          sha256sum gleambar.wasm > gleambar.wasm.sha256
+          gh release create "$GITHUB_REF_NAME" gleambar.wasm gleambar.wasm.sha256 \
+            --title "$GITHUB_REF_NAME" --generate-notes --verify-tag

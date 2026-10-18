@@ -2,6 +2,9 @@
 name = "zellij-gleambar"
 version = "0.1.0"
 edition = "2021"
+description = "One-line Zellij tab bar with a fixed mode badge, themed from the active Zellij theme"
+license = "MIT"
+repository = "https://github.com/snehilshah/zellij-gleambar"
 
 [dependencies]
 zellij-tile = "0.45.1"
