@@ -36,7 +36,10 @@ its swap layouts) now uses gleambar.
 
 ### First start
 
-Zellij asks once for permission to read and switch tabs:
+The first launch can show `Loading compact-bar...` for up to a minute while
+Zellij downloads and compiles the plugin. Later launches use the cache.
+
+Zellij then asks once for permission to read and switch tabs:
 
 ```
 This plugin asks permission to: ReadApplicationState, ChangeApplicationState. Allow? (y/n)
