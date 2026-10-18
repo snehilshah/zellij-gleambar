@@ -27,16 +27,26 @@ register_plugin!(State);
 
 impl ZellijPlugin for State {
     fn load(&mut self, _config: BTreeMap<String, String>) {
-        set_selectable(false);
+        // Stay selectable until permissions are granted, so a first-time user
+        // can focus the bar and answer the one-line prompt.
         request_permission(&[
             PermissionType::ReadApplicationState,
             PermissionType::ChangeApplicationState,
         ]);
-        subscribe(&[EventType::ModeUpdate, EventType::TabUpdate, EventType::Mouse]);
+        subscribe(&[
+            EventType::ModeUpdate,
+            EventType::TabUpdate,
+            EventType::Mouse,
+            EventType::PermissionRequestResult,
+        ]);
     }
 
     fn update(&mut self, event: Event) -> bool {
         match event {
+            Event::PermissionRequestResult(PermissionStatus::Granted) => {
+                set_selectable(false);
+                false
+            }
             Event::ModeUpdate(info) => {
                 let changed = info.mode != self.mode || info.style.colors != self.styling;
                 self.mode = info.mode;
@@ -49,8 +59,10 @@ impl ZellijPlugin for State {
                 changed
             }
             Event::Mouse(Mouse::LeftClick(_, col)) => {
-                if let Some(&(_, _, pos)) =
-                    self.click_targets.iter().find(|(s, e, _)| col >= *s && col < *e)
+                if let Some(&(_, _, pos)) = self
+                    .click_targets
+                    .iter()
+                    .find(|(s, e, _)| col >= *s && col < *e)
                 {
                     switch_tab_to(pos as u32 + 1);
                 }
@@ -77,7 +89,7 @@ impl ZellijPlugin for State {
         let mut used = 0;
         self.click_targets.clear();
 
-        let names: Vec<String> = self.tabs.iter().map(|t| tab_name(t)).collect();
+        let names: Vec<String> = self.tabs.iter().map(tab_name).collect();
         let widths: Vec<usize> = self
             .tabs
             .iter()
@@ -96,20 +108,23 @@ impl ZellijPlugin for State {
                 out += &format!("{bar}{marker}{m}");
             }
 
-            for i in lo..=hi {
-                let tab = &self.tabs[i];
+            for (tab, full_name) in self.tabs[lo..=hi].iter().zip(&names[lo..=hi]) {
                 let (text, num, body) = if tab.active {
                     let r = &s.ribbon_selected;
                     (fg(r.base), fg(r.emphasis_0), bg(r.background))
                 } else {
                     let r = &s.ribbon_unselected;
-                    let text = if tab.has_bell_notification { r.emphasis_0 } else { r.base };
+                    let text = if tab.has_bell_notification {
+                        r.emphasis_0
+                    } else {
+                        r.base
+                    };
                     (fg(text), fg(text), bg(r.background))
                 };
                 let bold = if tab.active { "\x1b[1m" } else { "" };
                 let label = format!(" {} ", tab.position + 1);
                 let room = tabs_cols.saturating_sub(used + label.width() + 1);
-                let name = truncate(&names[i], room);
+                let name = truncate(full_name, room);
                 let w = label.width() + name.width() + 1;
                 self.click_targets.push((used, used + w, tab.position));
                 used += w;
@@ -130,7 +145,14 @@ impl ZellijPlugin for State {
         // Right-aligned mode badge; its slot is always reserved.
         let badge = mode_badge(self.mode, &s.text_unselected).map(|(label, color)| {
             let text = format!(" {label} ");
-            (format!("{}{}\x1b[1m{text}\x1b[22m", fg(s.text_unselected.background), bg(color)), text.width())
+            (
+                format!(
+                    "{}{}\x1b[1m{text}\x1b[22m",
+                    fg(s.text_unselected.background),
+                    bg(color)
+                ),
+                text.width(),
+            )
         });
         let badge_w = badge.as_ref().map_or(0, |b| b.1);
         out += &format!("{bar}{}", " ".repeat(cols.saturating_sub(used + badge_w)));
@@ -154,7 +176,11 @@ fn mode_badge(mode: InputMode, t: &StyleDeclaration) -> Option<(&'static str, Pa
 
 /// Tab name plus status flags, capped at MAX_NAME columns.
 fn tab_name(tab: &TabInfo) -> String {
-    let mut name = if tab.name.is_empty() { "…".to_string() } else { truncate(&tab.name, MAX_NAME) };
+    let mut name = if tab.name.is_empty() {
+        "…".to_string()
+    } else {
+        truncate(&tab.name, MAX_NAME)
+    };
     if tab.is_fullscreen_active {
         name += " 󰊓";
     }
